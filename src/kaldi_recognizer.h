@@ -59,7 +59,7 @@ class KaldiRecognizer {
         void UpdateSilenceWeights();
         bool AcceptWaveform(Vector<BaseFloat> &wdata);
         bool GetSpkVector(Vector<BaseFloat> &out_xvector, int *frames);
-        const char *GetResult();
+        const char *GetResult(bool is_final);
         const char *StoreReturn(const string &res);
 
         Model *model_;

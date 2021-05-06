@@ -384,10 +384,11 @@ bool KaldiRecognizer::GetSpkVector(Vector<BaseFloat> &out_xvector, int *num_spk_
     return true;
 }
 
-const char* KaldiRecognizer::GetResult()
+const char* KaldiRecognizer::GetResult(bool is_final)
 {
     if (decoder_->NumFramesDecoded() == 0) {
-        return StoreReturn("{\"text\": \"\"}");
+        return StoreReturn(json::JSON({"text", "", 
+                                       "final", is_final}).dump());
     }
 
     kaldi::CompactLattice clat;
@@ -428,7 +429,9 @@ const char* KaldiRecognizer::GetResult()
     Lattice best_path;
     ConvertLattice(clat_best_path, &best_path);
     if (best_path.Start() == fst::kNoStateId) {
-        return StoreReturn("{\"text\": \"\"}");
+        return StoreReturn(json::JSON({"text", "", 
+                                       "final", is_final}).dump());
+
     } else {
         std::vector<int32> alignment;
         std::vector<int32> words;
@@ -451,7 +454,9 @@ const char* KaldiRecognizer::GetResult()
             if (!CompactLatticeToWordProns(*model_->trans_model_, clat_best_path, &words2, &times2, &lengths,
                                          &prons, &phone_lengths)) {
                 KALDI_WARN << "Failed to convert best path to phone sequence";
-                return StoreReturn("{\"text\": \"\"}");
+                return StoreReturn(json::JSON({"text", "", 
+                                               "final", is_final}).dump());
+
             }
         }
         json::JSON obj;
@@ -501,7 +506,7 @@ const char* KaldiRecognizer::GetResult()
                 obj["spk_frames"] = num_spk_frames;
             }
         }
-
+        obj["final"] = is_final;
         return StoreReturn(obj.dump());
     }
 }
@@ -510,48 +515,25 @@ const char* KaldiRecognizer::GetResult()
 const char* KaldiRecognizer::PartialResult()
 {
     if (state_ != RECOGNIZER_RUNNING) {
-        return StoreReturn("{\"text\": \"\"}");
+        return StoreReturn("{\"result\": [], \"final\": false}");
     }
-
-    json::JSON res;
-
-    if (decoder_->NumFramesDecoded() == 0) {
-        res["partial"] = "";
-        return StoreReturn(res.dump());
-    }
-
-    kaldi::Lattice lat;
-    decoder_->GetBestPath(false, &lat);
-    vector<kaldi::int32> alignment, words;
-    LatticeWeight weight;
-    GetLinearSymbolSequence(lat, &alignment, &words, &weight);
-
-    ostringstream text;
-    for (size_t i = 0; i < words.size(); i++) {
-        if (i) {
-            text << " ";
-        }
-        text << model_->word_syms_->Find(words[i]);
-    }
-    res["partial"] = text.str();
-
-    return StoreReturn(res.dump());
+    return GetResult(false);
 }
 
 const char* KaldiRecognizer::Result()
 {
     if (state_ != RECOGNIZER_RUNNING) {
-        return StoreReturn("{\"text\": \"\"}");
+        return StoreReturn("{\"result\": [], \"final\": true}");
     }
     decoder_->FinalizeDecoding();
     state_ = RECOGNIZER_ENDPOINT;
-    return GetResult();
+    return GetResult(true);
 }
 
 const char* KaldiRecognizer::FinalResult()
 {
     if (state_ != RECOGNIZER_RUNNING) {
-        return StoreReturn("{\"text\": \"\"}");
+        return StoreReturn("{\"result\": [], \"final\": true}");
     }
 
     feature_pipeline_->InputFinished();
@@ -559,7 +541,7 @@ const char* KaldiRecognizer::FinalResult()
     decoder_->AdvanceDecoding();
     decoder_->FinalizeDecoding();
     state_ = RECOGNIZER_FINALIZED;
-    GetResult();
+    GetResult(true);
 
     // Free some memory while we are finalized, next
     // iteration will reinitialize them anyway
