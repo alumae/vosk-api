@@ -18,6 +18,7 @@
 #include "lat/sausages.h"
 #include "language_model.h"
 #include "lat/lattice-functions.h"
+#include "lat/lattice-functions-transition-model.h"
 
 using namespace fst;
 using namespace kaldi::nnet3;
